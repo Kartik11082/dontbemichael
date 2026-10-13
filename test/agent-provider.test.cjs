@@ -18,7 +18,7 @@ const ts = require('typescript');
 
 const SHARED = path.join(__dirname, '..', 'src', 'shared');
 const out = fs.mkdtempSync(path.join(os.tmpdir(), 'agentprov-'));
-for (const name of ['claudeCommands', 'codexCommands', 'grokCommands', 'agentProvider']) {
+for (const name of ['claudeCommands', 'codexCommands', 'grokCommands', 'commandLine', 'agentProvider']) {
   const src = fs.readFileSync(path.join(SHARED, `${name}.ts`), 'utf8');
   const js = ts.transpileModule(src, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 }
@@ -43,6 +43,27 @@ test('copilot is a recognized, selectable provider', () => {
 test('inferAgentProvider maps the copilot binary (with path/flags) to copilot', () => {
   assert.strictEqual(ap.inferAgentProvider('copilot'), 'copilot');
   assert.strictEqual(ap.inferAgentProvider('/usr/local/bin/copilot --model gpt-5.4'), 'copilot');
+});
+
+for (const [command, expected] of [
+  ['"C:\\Program Files\\Claude\\claude.exe" --model sonnet', 'claude'],
+  ['"C:\\Users\\Jane Doe\\bin\\codex.cmd"', 'codex'],
+  ["'C:\\Users\\Jane Doe\\bin\\gemini.ps1' --model pro", 'gemini'],
+  ['"C:\\Tools\\COPILOT.BAT"', 'copilot'],
+  ['"/opt/AI Tools/codex" --model "model with spaces"', 'codex'],
+  ["'/opt/AI Tools/cursor-agent' --resume", 'cursor'],
+  ['C:\\Tools\\claude.exe --model sonnet', 'claude'],
+  ['"C:\\Program Files\\Other\\my-agent.exe"', 'custom']
+]) {
+  test(`inferAgentProvider recognizes ${command} as ${expected}`, () => {
+    assert.strictEqual(ap.inferAgentProvider(command), expected);
+  });
+}
+
+test('an explicit provider overrides inference from a quoted command', () => {
+  const command = '"C:\\Program Files\\Claude\\claude.exe"';
+  assert.strictEqual(ap.inferAgentProvider(command, 'codex'), 'codex');
+  assert.strictEqual(ap.inferAgentProvider(command, 'custom'), 'custom');
 });
 
 test('copilot preset builds the documented non-interactive print-mode shape', () => {
